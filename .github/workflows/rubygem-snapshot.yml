@@ -1,0 +1,44 @@
+name: "RubyGem Snapshot"
+run-name: "RubyGem Snapshot"
+
+on:
+  push:
+    branches:
+      - 'master'
+      - 'dev'
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.3.7"
+
+      - name: Install dependencies
+        run: |
+          bundle install
+
+      - name: Build Package
+        run: |
+          GEM_VERSION=$(cat VERSION | xargs)
+          SHORT_GITHUB_SHA=$(echo "${GITHUB_SHA}" | cut -c1-8)
+          BRANCH=$(echo -n "${GITHUB_REF_NAME}" | cut -d- -f4)
+          echo "${GEM_VERSION}.snapshot.${SHORT_GITHUB_SHA}.${BRANCH}" > VERSION
+          gem build *.gemspec
+
+      - name: Publish to GitHub Package Registry
+        run: |
+          mkdir -p $HOME/.gem
+          touch $HOME/.gem/credentials
+          chmod 0600 $HOME/.gem/credentials
+          printf -- "---\n:github: ${GEM_HOST_API_KEY}\n" > $HOME/.gem/credentials
+          set -x
+          gem push --KEY github --host https://rubygems.pkg.github.com/${OWNER} *.gem
+        env:
+          GEM_HOST_API_KEY: "Bearer ${{secrets.GITHUB_TOKEN}}"
+          OWNER: ${{ github.repository_owner }}
